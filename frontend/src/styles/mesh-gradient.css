@@ -1,0 +1,27 @@
+/* feature-mesh-band — atmospheric mesh gradient (Vercel palette) */
+
+.mesh-backdrop {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-canvas);
+}
+
+.mesh-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: -20% -10% -30%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 45% at 18% 28%, rgba(80, 227, 194, 0.55) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 82% 18%, rgba(0, 124, 240, 0.4) 0%, transparent 68%),
+    radial-gradient(ellipse 45% 50% at 75% 78%, rgba(255, 0, 128, 0.32) 0%, transparent 72%),
+    radial-gradient(ellipse 50% 45% at 12% 82%, rgba(249, 203, 40, 0.42) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 35% at 50% 55%, rgba(121, 40, 202, 0.22) 0%, transparent 75%),
+    radial-gradient(ellipse 35% 30% at 60% 35%, rgba(0, 223, 216, 0.28) 0%, transparent 70%);
+  filter: blur(2px);
+}
+
+.mesh-backdrop > * {
+  position: relative;
+  z-index: 1;
+}
