@@ -27,3 +27,11 @@ func KafkaBrokers() []string {
 func KafkaEnabled() bool {
 	return EnvOr("KAFKA_ENABLED", "true") != "false"
 }
+
+func NotesDatabaseURL() string {
+	return EnvOr("NOTES_DATABASE_URL", "")
+}
+
+func AuditDatabaseURL() string {
+	return EnvOr("AUDIT_DATABASE_URL", "")
+}

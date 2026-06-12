@@ -1,4 +1,4 @@
-.PHONY: up down logs build-ms run-gateway run-notes run-audit
+.PHONY: up down logs build-ms run-gateway run-notes run-audit test test-integration
 
 up:
 	docker compose up --build -d
@@ -22,3 +22,9 @@ run-notes:
 
 run-audit:
 	go run ./cmd/audit-service
+
+test:
+	go test $$(go list ./... | grep -v /tests/integration) -race -count=1
+
+test-integration:
+	go test -tags=integration ./tests/integration/... -count=1 -v

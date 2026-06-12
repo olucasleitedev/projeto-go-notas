@@ -37,6 +37,8 @@ API de notas em **arquitetura de microserviços** — Gateway, serviços indepen
 | **gateway** | 8080 | Proxy reverso, CORS, ponto único para o frontend |
 | **notes-service** | 8081 | CRUD de notas, publica eventos no Kafka |
 | **audit-service** | 8082 | Consome eventos e expõe trilha de auditoria |
+| **postgres-notes** | 5433 | Banco dedicado do notes-service |
+| **postgres-audit** | 5434 | Banco dedicado do audit-service |
 | **redpanda** | 19092 | Broker Kafka-compatible |
 
 ---
@@ -158,6 +160,43 @@ docker-compose.yml
 | `KAFKA_ENABLED` | `true` | `false` desliga mensageria |
 | `NOTES_SERVICE_URL` | `http://localhost:8081` | Gateway → notes |
 | `AUDIT_SERVICE_URL` | `http://localhost:8082` | Gateway → audit |
+| `NOTES_DATABASE_URL` | — | Postgres do notes-service |
+| `AUDIT_DATABASE_URL` | — | Postgres do audit-service |
+
+---
+
+## Observabilidade
+
+Cada serviço expõe:
+
+| Endpoint | Descrição |
+|----------|-----------|
+| `GET /health` | Liveness |
+| `GET /health/ready` | Readiness (com ping no Postgres quando configurado) |
+| `GET /metrics` | Prometheus (`http_requests_total`, `http_request_duration_seconds`) |
+
+Logs estruturados em JSON no stdout.
+
+---
+
+## Testes
+
+```powershell
+# Unitários
+go test ./internal/... -race -count=1
+
+# Integração (stack rodando via docker compose up)
+go test -tags=integration ./tests/integration/... -v
+```
+
+---
+
+## CI/CD
+
+Pipeline em `.github/workflows/ci.yml`:
+
+1. **unit** — `go vet`, testes unitários, build dos 3 serviços
+2. **integration** — `docker compose up`, testes E2E (nota → Kafka → auditoria) + Postgres
 
 ---
 
@@ -167,10 +206,10 @@ docker-compose.yml
 - [x] Kafka / event-driven
 - [x] Docker Compose
 - [x] Frontend com painel de auditoria
-- [ ] Postgres por serviço
-- [ ] Testes de integração
-- [ ] CI/CD
-- [ ] Observabilidade (logs estruturados, métricas)
+- [x] Postgres por serviço
+- [x] Testes de integração
+- [x] CI/CD
+- [x] Observabilidade (logs estruturados, métricas)
 
 ---
 
