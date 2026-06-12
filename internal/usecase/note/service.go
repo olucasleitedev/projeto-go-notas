@@ -7,17 +7,22 @@ import (
 	"time"
 
 	domain "estudos-golang/internal/domain/note"
+	"estudos-golang/pkg/events"
+	"estudos-golang/pkg/messaging"
 )
 
-// Service é a camada de aplicação (casos de uso).
-// Orquestra o domínio e chama o repositório — sem saber de HTTP ou banco.
 type Service struct {
-	repo domain.Repository
-	now  func() time.Time
+	repo      domain.Repository
+	publisher messaging.Publisher
+	now       func() time.Time
 }
 
 func NewService(repo domain.Repository) *Service {
 	return &Service{repo: repo, now: time.Now}
+}
+
+func NewServiceWithEvents(repo domain.Repository, publisher messaging.Publisher) *Service {
+	return &Service{repo: repo, publisher: publisher, now: time.Now}
 }
 
 type CreateInput struct {
@@ -40,6 +45,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (domain.Note, erro
 	if err := s.repo.Save(ctx, n); err != nil {
 		return domain.Note{}, err
 	}
+
+	s.publish(ctx, events.NoteEvent{
+		Type:      events.NoteCreated,
+		NoteID:    n.ID,
+		Title:     n.Title,
+		Timestamp: s.now().UTC(),
+	})
 	return n, nil
 }
 
@@ -64,15 +76,40 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (domain
 	if err := s.repo.Save(ctx, n); err != nil {
 		return domain.Note{}, err
 	}
+
+	s.publish(ctx, events.NoteEvent{
+		Type:      events.NoteUpdated,
+		NoteID:    n.ID,
+		Title:     n.Title,
+		Timestamp: s.now().UTC(),
+	})
 	return n, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {
-	_, err := s.repo.FindByID(ctx, id)
+	n, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(ctx, id)
+
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	s.publish(ctx, events.NoteEvent{
+		Type:      events.NoteDeleted,
+		NoteID:    n.ID,
+		Title:     n.Title,
+		Timestamp: s.now().UTC(),
+	})
+	return nil
+}
+
+func (s *Service) publish(ctx context.Context, evt events.NoteEvent) {
+	if s.publisher == nil {
+		return
+	}
+	_ = messaging.PublishNoteEvent(ctx, s.publisher, evt)
 }
 
 func newID() string {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { auditApi } from './api/audit'
 import { notesApi } from './api/notes'
+import type { NoteEvent } from './types/audit'
 import type { Note } from './types/note'
 import './App.css'
 
@@ -13,6 +15,16 @@ function App() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [apiOnline, setApiOnline] = useState<boolean | null>(null)
+  const [auditEvents, setAuditEvents] = useState<NoteEvent[]>([])
+
+  const loadAudit = useCallback(async () => {
+    try {
+      const data = await auditApi.listEvents()
+      setAuditEvents(data ?? [])
+    } catch {
+      setAuditEvents([])
+    }
+  }, [])
 
   const loadNotes = useCallback(async () => {
     setLoading(true)
@@ -31,7 +43,8 @@ function App() {
 
   useEffect(() => {
     void loadNotes()
-  }, [loadNotes])
+    void loadAudit()
+  }, [loadNotes, loadAudit])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -51,6 +64,7 @@ function App() {
       setForm(emptyForm)
       setEditingId(null)
       await loadNotes()
+      await loadAudit()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao salvar')
     } finally {
@@ -78,6 +92,7 @@ function App() {
       await notesApi.remove(id)
       if (editingId === id) cancelEdit()
       await loadNotes()
+      await loadAudit()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao excluir')
     }
@@ -99,7 +114,14 @@ function App() {
             <span className="dot" />
             {apiOnline === null ? 'Verificando API' : apiOnline ? 'API online' : 'API offline'}
           </span>
-          <button type="button" className="btn btn-secondary" onClick={() => void loadNotes()}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              void loadNotes()
+              void loadAudit()
+            }}
+          >
             Atualizar
           </button>
         </div>
@@ -107,11 +129,10 @@ function App() {
 
       <section className="feature-mesh-band mesh-backdrop">
         <div className="mesh-inner">
-          <p className="eyebrow-mono">feature-mesh-band · go-api</p>
+          <p className="eyebrow-mono">microservices · kafka · go</p>
           <h1 className="hero-title">Your notes, delivered.</h1>
           <p className="hero-lead">
-            Mesh gradient atmospheric backdrop at section scale. Display-lg headline with body-md
-            supporting copy — powered by your Go API.
+            API Gateway, Notes Service e Audit Service desacoplados via eventos no Kafka.
           </p>
         </div>
       </section>
@@ -201,12 +222,36 @@ function App() {
             )}
           </div>
         </div>
+
+        <div className="card-marketing audit-panel">
+          <div className="list-header">
+            <h2>Auditoria (Kafka)</h2>
+            <span className="footer-mono">audit-service</span>
+          </div>
+          {auditEvents.length === 0 ? (
+            <p className="muted">Nenhum evento ainda. Crie ou edite uma nota.</p>
+          ) : (
+            <ul className="note-list">
+              {auditEvents.map((evt, index) => (
+                <li key={`${evt.note_id}-${evt.timestamp}-${index}`} className="note-card">
+                  <div>
+                    <h3>{evt.type}</h3>
+                    <p>{evt.title || evt.note_id}</p>
+                    <time className="note-meta">
+                      {new Date(evt.timestamp).toLocaleString('pt-BR')}
+                    </time>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
 
       <footer className="footer">
         <div className="footer-inner">
-          <span>Go backend · React frontend</span>
-          <span className="footer-mono">design: vercel-inspired</span>
+          <span>Gateway · Notes · Audit · Kafka</span>
+          <span className="footer-mono">projeto-go-notas</span>
         </div>
       </footer>
     </>

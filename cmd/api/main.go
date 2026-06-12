@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	// Composition Root — único lugar que "liga" todas as camadas.
+	// Modo monólito (legado). Preferir: gateway + notes-service + audit-service.
 	repo := memory.NewNoteRepository()
 	noteSvc := usecase.NewService(repo)
 

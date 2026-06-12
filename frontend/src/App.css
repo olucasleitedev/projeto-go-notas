@@ -184,6 +184,10 @@
   gap: var(--space-lg);
 }
 
+.audit-panel {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 900px) {
   .showcase-inner {
     grid-template-columns: 1fr;

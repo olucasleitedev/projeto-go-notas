@@ -1,20 +1,57 @@
 # projeto-go-notas
 
-> Projeto **100% de estudos**. Não é produto, não é SaaS, não está em produção — é o meu laboratório para aprender Go na prática.
+API de notas em **arquitetura de microserviços** — Gateway, serviços independentes e mensageria com **Kafka** (Redpanda).
 
-Olá! Eu sou o **Lucas Leite** e criei este repositório enquanto estudo **Go** vindo de uma base em .NET. A ideia foi montar algo completo o suficiente para eu entender como um backend real se organiza, mas simples o bastante para eu conseguir explicar cada camada sem me perder.
-
-O resultado é uma API de **notas** (CRUD) com frontend em **React**, separados e conversando via REST.
+**Lucas Leite** · [github.com/olucasleitedev](https://github.com/olucasleitedev)
 
 ---
 
-## O que eu queria aprender com isso
+## Arquitetura
 
-- Organizar um projeto Go com pastas que façam sentido (`cmd/`, `internal/`, camadas)
-- Entender **DDD** e **Clean Architecture** sem framework mágico — só pacotes e interfaces
-- Expor uma API HTTP com `net/http` (stdlib, sem Gin/Echo)
-- Conectar um frontend e ver o fluxo completo funcionando
-- Publicar no GitHub e ter algo decente para o portfólio
+```
+                    ┌─────────────┐
+                    │   React     │
+                    │  :5173      │
+                    └──────┬──────┘
+                           │ HTTP
+                    ┌──────▼──────┐
+                    │   Gateway   │  :8080  (entrada única + CORS)
+                    └──────┬──────┘
+              ┌────────────┼────────────┐
+              │            │            │
+       ┌──────▼─────┐      │     ┌──────▼──────┐
+       │   Notes    │      │     │   Audit     │
+       │  Service   │      │     │  Service    │
+       │   :8081    │      │     │   :8082     │
+       └──────┬─────┘      │     └──────▲──────┘
+              │ publish    │            │ consume
+              └────────────┼────────────┘
+                    ┌──────▼──────┐
+                    │    Kafka    │  topic: note.events
+                    │  (Redpanda) │
+                    └─────────────┘
+```
+
+| Serviço | Porta | Responsabilidade |
+|---------|-------|------------------|
+| **gateway** | 8080 | Proxy reverso, CORS, ponto único para o frontend |
+| **notes-service** | 8081 | CRUD de notas, publica eventos no Kafka |
+| **audit-service** | 8082 | Consome eventos e expõe trilha de auditoria |
+| **redpanda** | 19092 | Broker Kafka-compatible |
+
+---
+
+## Eventos (Kafka)
+
+Tópico `note.events`:
+
+| Evento | Quando |
+|--------|--------|
+| `note.created` | Nota criada |
+| `note.updated` | Nota atualizada |
+| `note.deleted` | Nota excluída |
+
+O **audit-service** consome esses eventos de forma assíncrona — desacoplado do fluxo HTTP principal.
 
 ---
 
@@ -22,131 +59,121 @@ O resultado é uma API de **notas** (CRUD) com frontend em **React**, separados 
 
 | Camada | Tecnologia |
 |--------|------------|
-| Backend | Go 1.22+, `net/http` |
+| Gateway / serviços | Go 1.22+, `net/http` |
+| Mensageria | Kafka (Redpanda) · `segmentio/kafka-go` |
 | Frontend | React + TypeScript + Vite |
-| Persistência | Memória (por enquanto — some ao reiniciar) |
-| Design (front) | Inspirado no [design system Vercel](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/vercel/DESIGN.md) |
+| Infra local | Docker Compose |
 
 ---
 
-## Como o projeto está organizado
-
-Eu separei as responsabilidades assim:
-
-```
-projeto-go-notas/
-├── cmd/api/                    # ponto de entrada — onde tudo se conecta
-├── internal/
-│   ├── domain/note/            # entidade, regras, interface do repositório
-│   ├── usecase/note/           # casos de uso (criar, listar, editar, excluir)
-│   ├── infrastructure/memory/  # "banco" em memória
-│   └── interfaces/http/        # handlers REST + CORS
-├── frontend/                   # React consumindo a API
-└── go.mod
-```
-
-### O que cada camada faz (na minha cabeça)
-
-| Camada | Papel |
-|--------|-------|
-| **domain** | O coração — entidade `Note`, validações, erros de negócio |
-| **usecase** | Orquestra o fluxo — não sabe de HTTP nem de onde os dados vêm |
-| **infrastructure** | Detalhe técnico — hoje é memória, amanhã pode ser Postgres |
-| **interfaces** | Porta de entrada — traduz HTTP em chamadas de caso de uso |
-
-A regra que eu tento seguir: **dependências apontam para dentro**. O domínio não importa HTTP nem banco.
-
-```mermaid
-flowchart LR
-    React --> HTTP
-    HTTP --> UseCase
-    UseCase --> Domain
-    Memory -.->|implementa| Domain
-```
-
----
-
-## Rodar localmente
-
-### Pré-requisitos
-
-- [Go](https://go.dev/dl/) instalado (`go version`)
-- [Node.js](https://nodejs.org/) instalado (`node --version`)
-
-### 1. Backend (Go)
+## Rodar com Docker (recomendado)
 
 ```powershell
 cd "C:\Users\Lucas M2Z Creative\Documents\estudos-golang"
-go run ./cmd/api
+docker compose up --build
 ```
 
-API em **http://localhost:8080**
+Serviços disponíveis:
 
-### 2. Frontend (React)
+- Gateway: http://localhost:8080
+- Notes: http://localhost:8081
+- Audit: http://localhost:8082
 
-Em outro terminal:
+### Frontend
 
 ```powershell
-cd "C:\Users\Lucas M2Z Creative\Documents\estudos-golang\frontend"
+cd frontend
 npm install
 npm run dev
 ```
 
-Abra **http://localhost:5173**
+→ http://localhost:5173
 
 ---
 
-## Endpoints da API
+## Rodar local (sem Docker nos serviços Go)
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `GET` | `/health` | Health check |
-| `GET` | `/api/notes` | Listar notas |
-| `POST` | `/api/notes` | Criar nota |
-| `GET` | `/api/notes/{id}` | Buscar por ID |
-| `PUT` | `/api/notes/{id}` | Atualizar |
-| `DELETE` | `/api/notes/{id}` | Excluir |
+**Terminal 1 — Kafka (só o broker):**
 
-**Exemplo — criar nota:**
+```powershell
+docker compose up redpanda -d
+```
 
-```json
-POST /api/notes
-{
-  "title": "Estudar interfaces em Go",
-  "content": "Repository é um port, memory é um adapter"
-}
+**Terminal 2 — Notes:**
+
+```powershell
+$env:KAFKA_BROKERS="localhost:19092"
+go run ./cmd/notes-service
+```
+
+**Terminal 3 — Audit:**
+
+```powershell
+$env:KAFKA_BROKERS="localhost:19092"
+go run ./cmd/audit-service
+```
+
+**Terminal 4 — Gateway:**
+
+```powershell
+go run ./cmd/gateway
 ```
 
 ---
 
-## O que eu já fiz / o que vem depois
+## Estrutura do repositório
 
-**Feito:**
-- [x] API REST com Clean Architecture
-- [x] CRUD de notas
-- [x] Frontend React integrado
-- [x] CORS para desenvolvimento local
-- [x] Design system Vercel no front
-
-**Próximos estudos (quando eu for evoluindo):**
-- [ ] Persistência com Postgres
-- [ ] Testes nos use cases
-- [ ] Autenticação básica
-- [ ] Docker para subir tudo junto
+```
+cmd/
+├── gateway/           # API Gateway
+├── notes-service/     # microserviço de notas
+├── audit-service/     # microserviço de auditoria
+└── api/               # monólito legado (dev simples)
+internal/              # domínio, use cases, handlers
+pkg/
+├── events/            # contratos de eventos
+└── messaging/         # Kafka producer/consumer
+frontend/              # React
+docker-compose.yml
+```
 
 ---
 
-## Observações honestas
+## API (via Gateway :8080)
 
-- Os dados ficam **só em memória** — se reiniciar o servidor, as notas somem
-- O CORS está aberto (`*`) só para facilitar o estudo local
-- Eu ainda estou aprendendo Go — este código reflete meu nível **atual**, não um padrão definitivo de mercado
-- Feedback é bem-vindo!
+| Método | Rota | Serviço |
+|--------|------|---------|
+| `GET` | `/health` | gateway |
+| `GET/POST` | `/api/notes` | notes-service |
+| `GET/PUT/DELETE` | `/api/notes/{id}` | notes-service |
+| `GET` | `/api/audit/events` | audit-service |
+
+---
+
+## Variáveis de ambiente
+
+| Variável | Padrão | Uso |
+|----------|--------|-----|
+| `KAFKA_BROKERS` | `localhost:19092` | Brokers Kafka |
+| `KAFKA_ENABLED` | `true` | `false` desliga mensageria |
+| `NOTES_SERVICE_URL` | `http://localhost:8081` | Gateway → notes |
+| `AUDIT_SERVICE_URL` | `http://localhost:8082` | Gateway → audit |
+
+---
+
+## Roadmap
+
+- [x] Microserviços (gateway, notes, audit)
+- [x] Kafka / event-driven
+- [x] Docker Compose
+- [x] Frontend com painel de auditoria
+- [ ] Postgres por serviço
+- [ ] Testes de integração
+- [ ] CI/CD
+- [ ] Observabilidade (logs estruturados, métricas)
 
 ---
 
 ## Autor
 
 **Lucas Leite** — [olucasleitedev](https://github.com/olucasleitedev)
-
-Projeto de estudos pessoal. Sinta-se à vontade para explorar o código, forkar ou usar como referência.
